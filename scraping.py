@@ -6,13 +6,25 @@ def get_soup(link):
     req = requests.get(link)
     return Soup(req.text, "html.parser")
 
-def get_root_article_link():
-    soup = get_soup(f"{TWEENTRIBUNER_URL}/{CATEGORIES[0]}")
+def root_article_links():
+    # side nav article의 root => CATEGORIES[1] (tween56) 
+    soup = get_soup(f"{TWEENTRIBUNER_URL}/{CATEGORIES[1]}")
 
-    root_article_blocks = soup.findAll("div", "article-wrapper")
-    root_article_links =  [block.find("a")["href"] for block in root_article_blocks]
+    article_blocks = soup.findAll("div", "article-wrapper")
+    top_nav_article_links =  [block.find("a")["href"] for block in article_blocks]
 
-    return root_article_links
+    for LEXILE in LEXILE_RANGES:
+        soup = get_soup(f"{TWEENTRIBUNER_URL}/level/{LEXILE}")
+        article_blocks = soup.findAll("div", "article-wrapper")
+        side_nav_article_links =  [block.find("a")["href"] for block in article_blocks if block.find("a")["href"] not in top_nav_article_links]
+        top_nav_article_links += side_nav_article_links
+        
+    soup = get_soup(f"{TWEENTRIBUNER_URL}/topic/technology/{CATEGORIES[1]}")
+    article_blocks = soup.findAll("div", "article-wrapper")
+    tech_nav_article_links = [block.find("a")["href"] for block in article_blocks if block.find("a")["href"] not in top_nav_article_links]
+    top_nav_article_links += tech_nav_article_links
+
+    return top_nav_article_links
 
 def scraping(root_article_links):
 
@@ -23,7 +35,7 @@ def scraping(root_article_links):
 
             result = list()
 
-            altered_link = link.replace("/junior/", category)
+            altered_link = link.replace("/tween56/", category)
             soup = get_soup(TWEENTRIBUNER_URL + altered_link)
             
             url = TWEENTRIBUNER_URL + altered_link
@@ -61,14 +73,15 @@ def connect_gspread(file_name):
 
     return sheets
 
-# 여기서 왜 오류가 발생하지 않을까?  
 def write_gspread(worksheet, index, result):
     worksheet.update(f"A{index}:J{index}", [result])
 
 TWEENTRIBUNER_URL = "https://www.tweentribune.com"
 CATEGORIES = ["/junior/", "/tween56/", "/tween78/", "/teen/"]
+LEXILE_RANGES = ["500/590/", "600/690/", "700/790/", "800/890/", "900/990", "1000/1090/", "1100/1190/", "1200/1290/", "1300/1600"]
 GSPREAD_FILE = "Tween Tribune Scraping"
 sheets = connect_gspread(GSPREAD_FILE)    
 worksheet = sheets.sheet1
-root_article_links = get_root_article_link()
-scraping(root_article_links)
+
+article_links = root_article_links()
+scraping(article_links)
